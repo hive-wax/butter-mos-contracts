@@ -1,0 +1,112 @@
+#include "imports/stdlib.fc";
+#include "imports/crypto.fc";
+#include "imports/params.fc";
+#include "imports/hash.fc";
+#include "imports/message.fc";
+
+#include "data.fc";
+
+;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) { ;; ignore all empty messages
+        return ();
+    }
+
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    if (flags & 1) { ;; ignore all bounced messages
+        return ();
+    }
+
+    slice sender_address = cs~load_msg_addr();
+
+    (int order_id) = load_data();
+
+    int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
+    int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
+
+    if (op == op::message_out) {
+        cell args = in_msg_body~load_ref();
+        slice args_ds = args.begin_parse();
+
+        int relay = args_ds~load_uint(8);
+        int msgType = args_ds~load_uint(8);
+        int toChain = args_ds~load_uint(64);
+        cell target = args_ds~load_ref();
+        cell payload = args_ds~load_ref();
+        int gasLimit = args_ds~load_uint(64);
+
+        int new_order_id = order_id + 1;
+        int full_order_id = (CHAIN_POOL_ID << 56) | (new_order_id & 0x00FFFFFFFFFFFFFF);
+
+        emit_log_simple(LOG_MESSAGE_OUT,
+            begin_cell()
+                .store_uint(TON_CHAIN_ID, 64)
+                .store_uint(toChain, 64)
+                .store_uint(full_order_id, 64)
+                .store_slice(sender_address)
+                .store_ref(args)
+                .end_cell(), 0);
+
+        save_data(new_order_id);
+
+        return ();
+    }
+
+    if (op == op::verify) {
+        int hash = in_msg_body~load_uint(256);
+        slice prefix = get_eth_prefix_precomputed();
+        slice len_str = begin_cell().store_uint(0x3332, 16).end_cell().begin_parse();
+        slice hex_string = convert_hash_to_hex_string(hash, 1);
+
+        cell full_message = begin_cell()
+            .store_slice(prefix)
+            .store_slice(len_str)
+            .store_slice(begin_cell().store_uint(hash, 256).end_cell().begin_parse())
+            .end_cell();
+
+        int final_hash = keccak256(full_message.begin_parse(), 1);
+        slice s = full_message.begin_parse();
+        s~dump();
+        final_hash~dump();
+        ;; int h = keccak256(begin_cell().store_uint(hash, 256).end_cell().begin_parse(), 1);
+        ;; h~dump();
+
+        cell sig_cell = in_msg_body~load_ref();
+        slice sig_slice = sig_cell.begin_parse();
+        int v = sig_slice~load_uint(8);
+        int r = sig_slice~load_uint(256);
+        int s = sig_slice~load_uint(256);
+
+        int expected_address = in_msg_body~load_uint(160);
+
+        ;; ;; Verify the signature
+        (int success, int h, int x1, int x2) = ecrecover(final_hash, v, r, s);
+        throw_unless(33, success);
+        h~dump();
+        x1~dump();
+        int recovered_address = pubkey_to_eth_address(h, x1);
+        recovered_address~dump();
+        expected_address~dump();
+
+        if (recovered_address == expected_address) {
+            throw(101);
+        } else {
+            throw(102);
+        }
+        ;; If we've reached here, the signature is valid and the addresses match
+        ;; You can perform additional actions here if needed
+        return ();
+    }
+
+    throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
+}
+
+;; get methods are a means to conveniently read contract data using, for example, HTTP APIs
+;; they are marked with method_id
+;; note that unlike in many other smart contract VMs, get methods cannot be called by other contracts
+
+int get_order_id() method_id {
+    (int order_id)  = load_data();
+    return order_id;
+}
