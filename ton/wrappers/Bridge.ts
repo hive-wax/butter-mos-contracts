@@ -1,16 +1,26 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
+import {
+    Address,
+    beginCell,
+    Cell,
+    Contract,
+    contractAddress,
+    ContractProvider,
+    Sender,
+    SendMode,
+    Slice,
+} from '@ton/core';
 
 export type BridgeConfig = {
-    orderId: number;
+    orderNonce: number;
 };
 
 export function bridgeConfigToCell(config: BridgeConfig): Cell {
-    return beginCell().storeUint(config.orderId, 64).endCell();
+    return beginCell().storeUint(config.orderNonce, 256).endCell();
 }
 
 export const Opcodes = {
     increase: 0x7e8764ef,
-    verify: 0x3b3cca17,
+    messageIn: 0xd5f86120,
     messageOut: 0x136a3529,
 };
 
@@ -38,7 +48,7 @@ export class Bridge implements Contract {
         });
     }
 
-    async sendVerify(
+    async sendMessageIn(
         provider: ContractProvider,
         via: Sender,
         opts: {
@@ -47,26 +57,24 @@ export class Bridge implements Contract {
             v: bigint;
             r: bigint;
             s: bigint;
+            receiptRoot: bigint;
+            version: bigint;
+            blockNum: number;
+            chainId: number;
+            addr: bigint;
+            topics: bigint[];
+            message: Slice;
             expectedAddress: bigint;
         },
     ) {
-        const receiptRoot = 0;
-        const version = 0;
-        const blockNum = 0;
-        const chainId = 0;
-
-        const addr = 0;
-        const topics = [0, 0, 0];
-        const data = 0;
-        const message = beginCell().storeUint(2, 256).endCell().beginParse();
         await provider.internal(via, {
             value: opts.value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
-                .storeUint(Opcodes.verify, 32)
+                .storeUint(Opcodes.messageIn, 32)
                 .storeUint(0, 64)
                 .storeUint(opts.hash ?? 0, 256)
-                .storeUint(3, 8) // signature number
+                .storeUint(1, 8) // signature number
                 .storeRef(
                     beginCell()
                         .storeRef(
@@ -77,27 +85,28 @@ export class Bridge implements Contract {
                         )
                         .storeRef(
                             beginCell().storeUint(opts.v, 8).storeUint(opts.r, 256).storeUint(opts.s, 256).endCell(),
-                        ),
+                        )
+                        .endCell(),
                 )
                 .storeRef(
                     beginCell() // meta: receiptRoot, version, blockNum, chainId
-                        .storeUint(receiptRoot, 256)
-                        .storeUint(version, 256)
-                        .storeUint(blockNum, 256)
-                        .storeUint(chainId, 256)
+                        .storeUint(opts.receiptRoot, 256)
+                        .storeUint(opts.version, 256)
+                        .storeUint(opts.blockNum, 256)
+                        .storeUint(opts.chainId, 64)
                         .endCell(),
                 )
                 .storeRef(
                     beginCell() // MessageRelayPacked
-                        .storeUint(addr, 256)
+                        .storeUint(opts.addr, 256)
                         .storeRef(
                             beginCell()
-                                .storeUint(topics[0], 256)
-                                .storeUint(topics[1], 256)
-                                .storeUint(topics[2], 256)
+                                .storeUint(opts.topics[0], 256)
+                                .storeUint(opts.topics[1], 256)
+                                .storeUint(opts.topics[2], 256)
                                 .endCell(),
                         )
-                        .storeSlice(message)
+                        .storeSlice(opts.message)
                         .endCell(),
                 )
                 .storeUint(opts.expectedAddress, 160)
@@ -129,7 +138,7 @@ export class Bridge implements Contract {
                         .storeUint(opts.relay ? 1 : 0, 8)
                         .storeUint(opts.msgType, 8)
                         .storeUint(opts.toChain, 64)
-                        .storeSlice(beginCell().storeUint(BigInt(opts.target), 512).endCell().beginParse())
+                        .storeSlice(beginCell().storeUint(BigInt(opts.target), 256).endCell().beginParse())
                         .storeRef(beginCell().storeUint(1, 8).endCell())
                         .storeUint(opts.gasLimit, 64)
                         .endCell(),
@@ -138,8 +147,8 @@ export class Bridge implements Contract {
         });
     }
 
-    async getOrderID(provider: ContractProvider) {
-        const result = await provider.get('get_order_id', []);
+    async getOrderNonce(provider: ContractProvider) {
+        const result = await provider.get('get_order_nonce', []);
         return result.stack.readNumber();
     }
 }

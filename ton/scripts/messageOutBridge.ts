@@ -14,7 +14,7 @@ export async function run(provider: NetworkProvider, args: string[]) {
 
     const bridge = provider.open(Bridge.createFromAddress(address));
 
-    const counterBefore = await bridge.getOrderID();
+    const counterBefore = await bridge.getOrderNonce();
 
     await bridge.sendMessageOut(provider.sender(), {
         relay: false,
@@ -28,12 +28,12 @@ export async function run(provider: NetworkProvider, args: string[]) {
 
     ui.write('Waiting for bridge to message out...');
 
-    let counterAfter = await bridge.getOrderID();
+    let counterAfter = await bridge.getOrderNonce();
     let attempt = 1;
     while (counterAfter === counterBefore) {
         ui.setActionPrompt(`Attempt ${attempt}`);
         await sleep(2000);
-        counterAfter = await bridge.getOrderID();
+        counterAfter = await bridge.getOrderNonce();
         attempt++;
     }
 

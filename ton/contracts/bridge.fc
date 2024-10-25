@@ -1,10 +1,11 @@
 #include "imports/stdlib.fc";
 #include "imports/crypto.fc";
 #include "imports/params.fc";
-#include "imports/hash.fc";
 #include "imports/message.fc";
 
 #include "data.fc";
+#include "imports/error_codes.fc";
+#include "imports/utils.fc";
 
 ;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
@@ -20,7 +21,7 @@
 
     slice sender_address = cs~load_msg_addr();
 
-    (int order_id) = load_data();
+    (int order_nonce) = load_data();
 
     int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
     int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
@@ -32,68 +33,84 @@
         int relay = args_ds~load_uint(8);
         int msgType = args_ds~load_uint(8);
         int toChain = args_ds~load_uint(64);
-        cell target = args_ds~load_ref();
+
+        ;; get target arg
+        int remaining_bits = slice_bits(args_ds);
+        slice target = args_ds~load_bits(remaining_bits - 64);
+
         cell payload = args_ds~load_ref();
         int gasLimit = args_ds~load_uint(64);
 
-        int new_order_id = order_id + 1;
-        int full_order_id = (CHAIN_POOL_ID << 56) | (new_order_id & 0x00FFFFFFFFFFFFFF);
+        int new_order_nonce = order_nonce + 1;
+        slice my_address = my_address();
+        int full_order_id = get_order_id(my_address, new_order_nonce, toChain, sender_address, target);
 
         emit_log_simple(LOG_MESSAGE_OUT,
             begin_cell()
                 .store_uint(TON_CHAIN_ID, 64)
                 .store_uint(toChain, 64)
-                .store_uint(full_order_id, 64)
+                .store_uint(full_order_id, 256)
                 .store_slice(sender_address)
                 .store_ref(args)
                 .end_cell(), 0);
 
-        save_data(new_order_id);
+        save_data(new_order_nonce);
 
         return ();
     }
 
-    if (op == op::verify) {
+    if (op == op::message_in) {
         int hash = in_msg_body~load_uint(256);
-        slice prefix = get_eth_prefix_precomputed();
-        slice len_str = begin_cell().store_uint(0x3332, 16).end_cell().begin_parse();
-        slice hex_string = convert_hash_to_hex_string(hash, 1);
+        int sign_number = in_msg_body~load_uint(8);
+        sign_number~dump();
 
-        cell full_message = begin_cell()
-            .store_slice(prefix)
-            .store_slice(len_str)
-            .store_slice(begin_cell().store_uint(hash, 256).end_cell().begin_parse())
-            .end_cell();
+        cell signs_cell = in_msg_body~load_ref();
+        slice signs_slice = signs_cell.begin_parse();
+        cell sign_cell = signs_slice~load_ref();
+        slice sign_slice = sign_cell.begin_parse();
+        int v = sign_slice~load_uint(8);
+        int r = sign_slice~load_uint(256);
+        int s = sign_slice~load_uint(256);
 
-        int final_hash = keccak256(full_message.begin_parse(), 1);
-        slice s = full_message.begin_parse();
-        s~dump();
-        final_hash~dump();
-        ;; int h = keccak256(begin_cell().store_uint(hash, 256).end_cell().begin_parse(), 1);
-        ;; h~dump();
+        int signed_hash = to_eth_signed_message_hash(hash);
 
-        cell sig_cell = in_msg_body~load_ref();
-        slice sig_slice = sig_cell.begin_parse();
-        int v = sig_slice~load_uint(8);
-        int r = sig_slice~load_uint(256);
-        int s = sig_slice~load_uint(256);
+        ;; meta
+        cell meta_cell = in_msg_body~load_ref();
+        slice meta_slice = meta_cell.begin_parse();
+
+        int receipt_root = meta_slice~load_uint(256);
+        int version = meta_slice~load_uint(256);
+        int block_num = meta_slice~load_uint(256);
+        int chain_id = meta_slice~load_uint(64);
+
+        int expected_hash = get_meta_hash(receipt_root, version, block_num, chain_id);
+        throw_unless(error::wrong_meta, expected_hash == hash);
 
         int expected_address = in_msg_body~load_uint(160);
 
-        ;; ;; Verify the signature
-        (int success, int h, int x1, int x2) = ecrecover(final_hash, v, r, s);
+        (int success, int h, int x1, int x2) = ecrecover(signed_hash, v, r, s);
         throw_unless(33, success);
-        h~dump();
-        x1~dump();
         int recovered_address = pubkey_to_eth_address(h, x1);
-        recovered_address~dump();
-        expected_address~dump();
 
-        if (recovered_address == expected_address) {
-            throw(101);
-        } else {
-            throw(102);
-        }
+        throw_unless(error::wrong_signature, recovered_address == expected_address);
+
+        cell msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(sender_address)
+            .store_coins(0)
+            .store_msgbody_prefix_ref(
+                begin_cell()
+                    .store_op(op::mapo_execute)
+                    .store_query_id(query_id)
+                    .store_uint(1, 64) ;; from chain id
+                    .store_uint(56, 64) ;; to chain id
+                    .store_slice(sender_address) ;; sender address
+                    .store_uint(2, 256) ;; order id
+                    .store_ref(begin_cell().end_cell()) ;; message
+                    .end_cell())
+            .end_cell();
+
+        send_raw_message(msg, 64);
         ;; If we've reached here, the signature is valid and the addresses match
         ;; You can perform additional actions here if needed
         return ();
@@ -106,7 +123,7 @@
 ;; they are marked with method_id
 ;; note that unlike in many other smart contract VMs, get methods cannot be called by other contracts
 
-int get_order_id() method_id {
-    (int order_id)  = load_data();
-    return order_id;
+int get_order_nonce() method_id {
+    (int order_nonce)  = load_data();
+    return order_nonce;
 }

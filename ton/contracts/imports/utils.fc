@@ -1,0 +1,15 @@
+#include "crypto.fc";
+#include "params.fc";
+#include "stdlib.fc";
+
+;; keccak256(abi.encodePacked(address(this), nonce++, _fromChain, _toChain, _from, _to));
+(int) get_order_id(slice addr, int order_nonce, int to_chain, slice from, slice to) inline {
+    return keccak256(begin_cell()
+        .store_ref(begin_cell().store_slice(addr).end_cell())
+        .store_uint(order_nonce, 256)
+        .store_uint(TON_CHAIN_ID, 64)
+        .store_uint(to_chain, 64)
+        .store_ref(begin_cell().store_slice(from).end_cell())
+        .store_ref(begin_cell().store_slice(to).end_cell())
+        .end_cell().begin_parse(), 1);
+}

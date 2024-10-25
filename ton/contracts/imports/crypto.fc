@@ -7,6 +7,7 @@
 (int, int, int, int) ecrecover(int hash, int v, int r, int s) asm "ECRECOVER";
 
 int keccak256(slice s, int n) asm "HASHEXT_KECCAK256";
+int keccak256_2(slice s1, slice s2, int n) asm "HASHEXT_KECCAK256";
 
 (slice) convert_hash_to_hex_string(int hash, int hasPrefix) inline {
     int length = 64; ;; 256 bits = 64 hex characters
@@ -75,3 +76,28 @@ slice get_eth_prefix_precomputed() inline {
         .end_cell().begin_parse();
 }
 
+int to_eth_signed_message_hash(int hash) inline {
+    slice prefix = get_eth_prefix_precomputed();
+    slice len_str = begin_cell().store_uint(0x3332, 16).end_cell().begin_parse();
+    slice hex_string = convert_hash_to_hex_string(hash, 1);
+
+    cell full_message = begin_cell()
+        .store_slice(prefix)
+        .store_slice(len_str)
+        .store_slice(begin_cell().store_uint(hash, 256).end_cell().begin_parse())
+        .end_cell();
+
+    return keccak256(full_message.begin_parse(), 1);
+}
+
+int get_meta_hash(int receipt_root, int version, int block_num, int chain_id) inline  {
+    slice left = begin_cell()
+        .store_uint(receipt_root, 256)
+        .store_uint(version, 256)
+        .store_uint(block_num, 256)
+        .end_cell().begin_parse();
+
+    slice right = begin_cell().store_uint(chain_id, 256).end_cell().begin_parse();
+
+    return keccak256_2(left, right, 2);
+}

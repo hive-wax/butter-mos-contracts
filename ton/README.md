@@ -3,34 +3,52 @@
 ## Contracts
 
 ### Bridge Testnet
-EQD9pVSCmODM-M3V380x4OH1kG6a7tTTnsP00n7M59iD5etS
+EQDyD3ICi9YkGdIf19dJHoq-70Ng9lWY9lCbIVM-tfi_yp1v
 
 ## Functions
 
+### Mapo Execute
+
+```
+begin_cell()
+    .store_op(op::mapo_execute)
+    .store_query_id(query_id)
+    .store_uint(1, 64) ;; from chain id
+    .store_uint(56, 64) ;; to chain id
+    .store_slice(sender_address) ;; sender address
+    .store_uint(2, 256) ;; order id
+    .store_ref(begin_cell().end_cell()) ;; message
+    .end_cell()
+```
+
 ### Call message out
 
-```javascript
-const relay = false
-const msgType = 0
-const toChain = 56n
-const target = BigInt(0x70997970c51812dc3a010c7d01b50e0d17dc79c8)
-const payload = beginCell().storeUint(1, 8).endCell()
-const gasLimit = 200000000 
-
-beginCell()
-    .storeUint(Opcodes.messageOut, 32) // 0x136a3529
-    .storeUint(0, 64)
-    .storeRef(
-        beginCell()
-            .storeUint(relay ? 1 : 0, 8)
-            .storeUint(msgType, 8)
-            .storeUint(toChain, 64)
-            .storeSlice(beginCell().storeUint(BigInt(target), 512).endCell().beginParse())
-            .storeRef(payload)
-            .storeUint(gasLimit, 64)
-        .endCell()
+```
+slice bridge_addr = <bridge address>;
+;; message out body
+cell body = begin_cell()
+    .store_uint(0x136a3529, 32) ;; op::message_out
+    .store_uint(0, 64) ;; queryId
+    .store_ref(
+        begin_cell()
+            .store_uint(0, 8) ;; relay, 0 or 1
+            .store_uint(0, 8) ;; msgType, 0 for message or 1 for calldata
+            .store_uint(56, 64) ;; toChain, eg. 56 for bnb
+            .store_slice(begin_cell().store_uint(0x70997970c51812dc3a010c7d01b50e0d17dc79c8, 512).end_cell().begin_parse()) ;; target address
+            .store_ref(begin_cell().store_uint(1, 8).end_cell()) ;; payload, custom data
+            .store_uint(200000000, 64) ;; gasLimit
+            .end_cell()
     )
-    .endCell()
+    .end_cell();
+
+;; internal message
+cell msg = begin_cell()
+    .store_uint(0x18, 6)
+    .store_slice(bridge_addr)
+    .store_coins(50000000) ;; 0.05 TON for fees
+    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+    .store_slice(body)
+    .end_cell();
 ```
 
 ## Events
@@ -41,7 +59,7 @@ beginCell()
 begin_cell()
     .store_uint(TON_CHAIN_ID, 64)
     .store_uint(toChain, 64)
-    .store_uint(full_order_id, 64)
+    .store_uint(full_order_id, 256)
     .store_slice(sender_address)
     .store_ref(args)
 .end_cell()

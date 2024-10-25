@@ -2,13 +2,13 @@ import { toNano } from '@ton/core';
 import { Bridge } from '../wrappers/Bridge';
 import { compile, NetworkProvider } from '@ton/blueprint';
 
-// testnet: EQD9pVSCmODM-M3V380x4OH1kG6a7tTTnsP00n7M59iD5etS
+// testnet: EQDyD3ICi9YkGdIf19dJHoq-70Ng9lWY9lCbIVM-tfi_yp1v
 export async function run(provider: NetworkProvider) {
-    const orderId = Math.floor(Math.random() * 10000);
+    const orderNonce = Math.floor(Math.random() * 10000);
     const bridge = provider.open(
         Bridge.createFromConfig(
             {
-                orderId,
+                orderNonce,
             },
             await compile('Bridge'),
         ),
@@ -18,5 +18,5 @@ export async function run(provider: NetworkProvider) {
 
     await provider.waitForDeploy(bridge.address);
 
-    console.log('ID', await bridge.getOrderID());
+    console.log('ID', await bridge.getOrderNonce());
 }

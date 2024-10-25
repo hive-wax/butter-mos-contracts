@@ -4,16 +4,16 @@
 (int) load_data() impure {
     var ds = get_data().begin_parse();
 
-    ;; Order ID, used to track bridge operations (ton -> other chain)
-    int order_id = ds~load_uint(64);
-    return (order_id);
+    ;; Order nonce, used to track bridge operations (ton -> other chain)
+    int order_nonce = ds~load_uint(256);
+    return (order_nonce);
 }
 
 ;; save_data stores storage variables as a cell into persistent storage
-() save_data(int order_id) impure {
+() save_data(int order_nonce) impure {
     set_data(
         begin_cell()
-            .store_uint(order_id, 64)
+            .store_uint(order_nonce, 256)
             .end_cell()
     );
 }

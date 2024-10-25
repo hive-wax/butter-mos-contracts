@@ -4,8 +4,9 @@ const int CHAIN_POOL_ID = 70;
 const TON_CHAIN_ID = 1360104473493505;
 
 ;; op
-const int op::verify = "op::verify"c;
+const int op::message_in = "op::message_in"c;
 const int op::message_out = "op::message_out"c;
+const int op::mapo_execute = "op::mapo_execute"c;
 
 ;; log
 const int LOG_MESSAGE_OUT = 0x34a7e0e8;

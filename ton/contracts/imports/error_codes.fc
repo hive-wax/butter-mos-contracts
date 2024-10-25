@@ -1,0 +1,3 @@
+
+const int error::wrong_signature = 600;
+const int error::wrong_meta = 601;

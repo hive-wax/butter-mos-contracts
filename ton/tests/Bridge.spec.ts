@@ -6,6 +6,7 @@ import { compile } from '@ton/blueprint';
 import * as secp256k1 from 'secp256k1';
 import * as crypto from 'crypto';
 import {
+    encodePacked,
     getAddress,
     hashMessage,
     keccak256,
@@ -43,7 +44,7 @@ describe('Bridge', () => {
         bridge = blockchain.openContract(
             Bridge.createFromConfig(
                 {
-                    orderId: 0,
+                    orderNonce: 0,
                 },
                 code,
             ),
@@ -65,7 +66,7 @@ describe('Bridge', () => {
         const messager = await blockchain.treasury('message_out');
 
         const bnbId = 56n;
-        const orderIdBefore = await bridge.getOrderID();
+        const orderIdBefore = await bridge.getOrderNonce();
 
         console.log('order id before', orderIdBefore);
 
@@ -94,14 +95,27 @@ describe('Bridge', () => {
         // const toChain = ds?.loadUintBig(64);
         console.log(fromChain);
 
-        const orderIdAfter = await bridge.getOrderID();
+        const orderIdAfter = await bridge.getOrderNonce();
 
         console.log('order id after', orderIdAfter);
 
         expect(orderIdAfter).toBe(orderIdBefore + 1);
     });
 
-    it('sign and verify', async () => {
+    it('parse message out event', async () => {
+        const body = Cell.fromHex(
+            'b5ee9c7201010301008d0001a30004d502000000010000000000000038e80fc4e623cb4b6e20a5c086525f9257c138cbd5e811aa281a8fdce860fb80668013901072cbe28d212d321e4fb20585b395db95869b19002f9bf0dd54ca922023f00101640000000000000000003800000000000000000000000070997970c5181400000000000000000000000000000000000bebc20002000201',
+        );
+
+        const ds = body.beginParse();
+        const fid = ds.loadUint(64);
+        const tid = ds.loadUint(64);
+        const orderId = ds.loadUintBig(256);
+        const sender = ds.loadAddress();
+        console.log(fid, tid, orderId, sender);
+    });
+
+    it('sign and verify with viem', async () => {
         const content =
             '0xbf74b3ed582ac731d1cd0c4aa0a272feb293f27858e5e4a942e1559625d1550863ef8f81f37c748d528d574938f44f82d376c8caf8b7b2bcc78f9aed85db214a0000000000000000000000000000000000000000000000000000000000c5099c0000000000000000000000000000000000000000000000000000000000000089';
         const hash = '0xfc40624617cb3100f38078c399e926bf725181f9b9168d245e7a0139f0b65996';
@@ -185,6 +199,44 @@ describe('Bridge', () => {
         console.log(publicKeyToAddress(tonPub));
     });
 
+    it('message in', async () => {
+        const signature =
+            '0xa6c438d86c9f4f5b210a6fb8dc8d3a9533350d49fb905a889c0cfef80880b9fa4dcd3713ff4b79cc9d7d66c146015ba9356fbc9975cd27658b21a3f1097e0d001c';
+        const hash = '0x1852f796d47a946139808b1749ae129a132fd7d3fbed34f1aa312edf7f3a2cd9';
+
+        const receiptRoot = '0x972ffee54242d4feb376307deca961f0895db675a281ae78dd320bf1f51595af';
+        const version = '0x29de751901b431127a4bedd2c75660930cab189266ce166daf73e38f9d0f979c';
+        const blockNum = 12392013;
+        const chainId = 212;
+        const beforeHash = encodePacked(
+            ['bytes32', 'bytes32', 'uint256', 'uint256'],
+            [receiptRoot, version, BigInt(blockNum), BigInt(chainId)],
+        );
+        console.log(beforeHash, keccak256(beforeHash));
+
+        const { r, s, yParity } = parseSignature(signature);
+        const signer = '0xE0DC8D7f134d0A79019BEF9C2fd4b2013a64fCD6';
+        const verifier = await blockchain.treasury('verifier');
+
+        const increaseResult = await bridge.sendMessageIn(verifier.getSender(), {
+            value: toNano('0.05'),
+            hash: BigInt(hash),
+            v: BigInt(yParity),
+            r: BigInt(r),
+            s: BigInt(s),
+            receiptRoot: BigInt(receiptRoot),
+            version: BigInt(version),
+            blockNum,
+            chainId,
+            expectedAddress: BigInt(signer),
+        });
+
+        expect(increaseResult.transactions).toHaveTransaction({
+            from: verifier.address,
+            to: bridge.address,
+            success: true,
+        });
+    });
     // 0x04ae84e575adbb682cb2412874cc0cf36eb16fc8b677dd33d9a7f46936ca83c76888f166eb775fad2cf8f05867b66b95f5696d78a183676bdc53210fd88dd85c68
     it('should verify pass', async () => {
         const signature =
@@ -192,16 +244,26 @@ describe('Bridge', () => {
         const beforeHash =
             '0xbf74b3ed582ac731d1cd0c4aa0a272feb293f27858e5e4a942e1559625d1550863ef8f81f37c748d528d574938f44f82d376c8caf8b7b2bcc78f9aed85db214a0000000000000000000000000000000000000000000000000000000000c5099c0000000000000000000000000000000000000000000000000000000000000089';
         const hash = '0xfc40624617cb3100f38078c399e926bf725181f9b9168d245e7a0139f0b65996';
+
+        const receiptRoot = '0x972ffee54242d4feb376307deca961f0895db675a281ae78dd320bf1f51595af';
+        const version = '0x29de751901b431127a4bedd2c75660930cab189266ce166daf73e38f9d0f979c';
+        const blockNum = 12392013;
+        const chainId = 212;
+
         const { r, s, yParity } = parseSignature(signature);
         const signer = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
         const verifier = await blockchain.treasury('verifier');
 
-        const increaseResult = await bridge.sendVerify(verifier.getSender(), {
+        const increaseResult = await bridge.sendMessageIn(verifier.getSender(), {
             value: toNano('0.05'),
             hash: BigInt(hash),
             v: BigInt(yParity),
             r: BigInt(r),
             s: BigInt(s),
+            receiptRoot: BigInt(receiptRoot),
+            version: BigInt(version),
+            blockNum,
+            chainId,
             expectedAddress: BigInt(signer),
         });
 
