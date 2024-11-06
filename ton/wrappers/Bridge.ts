@@ -127,6 +127,7 @@ export class Bridge implements Contract {
             gasLimit: number;
         },
     ) {
+        const target = beginCell().storeUint(BigInt(opts.target), 256).endCell().beginParse();
         await provider.internal(via, {
             value: opts.value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
@@ -138,7 +139,7 @@ export class Bridge implements Contract {
                         .storeUint(opts.relay ? 1 : 0, 8)
                         .storeUint(opts.msgType, 8)
                         .storeUint(opts.toChain, 64)
-                        .storeSlice(beginCell().storeUint(BigInt(opts.target), 256).endCell().beginParse())
+                        .storeSlice(target)
                         .storeRef(beginCell().storeUint(1, 8).endCell())
                         .storeUint(opts.gasLimit, 64)
                         .endCell(),

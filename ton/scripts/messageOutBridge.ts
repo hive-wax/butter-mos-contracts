@@ -20,7 +20,7 @@ export async function run(provider: NetworkProvider, args: string[]) {
         relay: false,
         msgType: 0,
         toChain: 56n,
-        target: BigInt(0x70997970c51812dc3a010c7d01b50e0d17dc79c8),
+        target: BigInt('0x70997970c51812dc3a010c7d01b50e0d17dc79c8'),
         payload: 'message',
         gasLimit: 200000000,
         value: toNano('0.06'),
