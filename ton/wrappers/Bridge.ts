@@ -122,28 +122,25 @@ export class Bridge implements Contract {
             relay: boolean;
             msgType: number;
             toChain: bigint;
-            target: bigint;
+            target: Slice;
             payload: string;
+            initiator: Address;
             gasLimit: number;
         },
     ) {
-        const target = beginCell().storeUint(BigInt(opts.target), 256).endCell().beginParse();
         await provider.internal(via, {
             value: opts.value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: beginCell()
                 .storeUint(Opcodes.messageOut, 32)
                 .storeUint(0, 64)
-                .storeRef(
-                    beginCell()
-                        .storeUint(opts.relay ? 1 : 0, 8)
-                        .storeUint(opts.msgType, 8)
-                        .storeUint(opts.toChain, 64)
-                        .storeSlice(target)
-                        .storeRef(beginCell().storeUint(1, 8).endCell())
-                        .storeUint(opts.gasLimit, 64)
-                        .endCell(),
-                )
+                .storeUint(opts.relay ? 1 : 0, 8)
+                .storeUint(opts.msgType, 8)
+                .storeUint(opts.toChain, 64)
+                .storeSlice(opts.target)
+                .storeUint(opts.gasLimit, 64)
+                .storeAddress(opts.initiator)
+                .storeRef(beginCell().storeUint(234234982374982374982374, 256).endCell())
                 .endCell(),
         });
     }

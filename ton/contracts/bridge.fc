@@ -27,31 +27,42 @@
     int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
 
     if (op == op::message_out) {
-        cell args = in_msg_body~load_ref();
-        slice args_ds = args.begin_parse();
 
-        int relay = args_ds~load_uint(8);
-        int msgType = args_ds~load_uint(8);
-        int toChain = args_ds~load_uint(64);
+        int relay = in_msg_body~load_uint(8);
+        int msg_type = in_msg_body~load_uint(8);
+        int to_chain = in_msg_body~load_uint(64);
+        slice target = in_msg_body~load_bits(512);
+        int gas_limit = in_msg_body~load_uint(64);
+        slice initiator = in_msg_body~load_msg_addr();
 
-        ;; get target arg
-        int remaining_bits = slice_bits(args_ds);
-        slice target = args_ds~load_bits(remaining_bits - 64);
-
-        cell payload = args_ds~load_ref();
-        int gasLimit = args_ds~load_uint(64);
+        cell payload = in_msg_body~load_ref();
 
         int new_order_nonce = order_nonce + 1;
         slice my_address = my_address();
-        int full_order_id = get_order_id(my_address, new_order_nonce, toChain, sender_address, target);
+        int full_order_id = get_order_id(my_address, new_order_nonce, to_chain, sender_address, target);
 
         emit_log_simple(LOG_MESSAGE_OUT,
             begin_cell()
-                .store_uint(TON_CHAIN_ID, 64)
-                .store_uint(toChain, 64)
-                .store_uint(full_order_id, 256)
-                .store_slice(sender_address)
-                .store_ref(args)
+                .store_ref(begin_cell()
+                    .store_uint(relay, 8)
+                    .store_uint(msg_type, 8)
+                    .store_uint(TON_CHAIN_ID, 64)
+                    .store_uint(to_chain, 64)
+                    .store_uint(gas_limit, 64)
+                    .store_slice(initiator)
+                    .store_slice(sender_address)
+                    .end_cell()
+                )
+                .store_ref(begin_cell()
+                    .store_slice(target)
+                    .store_ref(payload).end_cell()
+                )
+                .store_ref(begin_cell()
+                    .store_uint(full_order_id, 256)
+                    .store_slice(my_address)
+                    .store_slice(my_address)
+                    .store_uint(0, 128).end_cell()
+                )
                 .end_cell(), 0);
 
         save_data(new_order_nonce);

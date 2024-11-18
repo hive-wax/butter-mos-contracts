@@ -1,4 +1,4 @@
-import { Address, toNano } from '@ton/core';
+import { Address, beginCell, toNano } from '@ton/core';
 import { Bridge } from '../wrappers/Bridge';
 import { NetworkProvider, sleep } from '@ton/blueprint';
 
@@ -16,12 +16,23 @@ export async function run(provider: NetworkProvider, args: string[]) {
 
     const counterBefore = await bridge.getOrderNonce();
 
+    const target =
+        '613062383639393163363231386233366331643139643461326539656230636533363036656234382E666163746F72792E6272696467652E6E656172';
+    const highHex = target.slice(0, 64);
+    const lowHex = target.slice(64);
+
+    const t = beginCell()
+        .storeUint(BigInt('0x' + highHex), 256)
+        .storeUint(BigInt('0x' + lowHex), 256)
+        .endCell();
+
     await bridge.sendMessageOut(provider.sender(), {
         relay: false,
         msgType: 0,
-        toChain: 56n,
-        target: BigInt('0x70997970c51812dc3a010c7d01b50e0d17dc79c8'),
+        toChain: 1360100178526209n,
+        target: t.beginParse(),
         payload: 'message',
+        initiator: Address.parse('0QBE2Qs7ub-3frxnGOWFfwBdVqUSeAv2NPl4KgdeC7TJMnNG'),
         gasLimit: 200000000,
         value: toNano('0.06'),
     });

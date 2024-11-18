@@ -1,5 +1,5 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Cell, toNano } from '@ton/core';
+import { Address, beginCell, Cell, ExternalAddress, Message, toNano, Transaction } from '@ton/core';
 import { Bridge } from '../wrappers/Bridge';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
@@ -22,6 +22,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount, publicKeyToAddress } from 'viem/accounts';
 import { EventMessageSent } from '@ton/sandbox/dist/event/Event';
+import { generateTonClient } from '../utils/ton';
 
 function hexToUint8Array(hexString: string) {
     return new Uint8Array(Buffer.from(hexString.startsWith('0x') ? hexString.slice(2) : hexString, 'hex'));
@@ -74,6 +75,69 @@ describe('Bridge', () => {
         console.log(relay, msgType, toChain);
     });
 
+    function p() {}
+
+    it('parse tx', async () => {
+        const client = generateTonClient();
+        const address = Address.parse('EQDGw8MzbP58r9RC_humaBQrz0msho55tmh8NxdYfCDQIZ9S');
+        try {
+            const transactions = await client.getTransactions(address, { limit: 10 });
+            for (const tx of transactions) {
+                if (tx.outMessages.size > 0) {
+                    tx.outMessages.values().forEach((message: Message, key: number) => {
+                        if (message.info.dest && message.info.dest instanceof ExternalAddress) {
+                            if (message.info.dest.toString() === 'External<256:883417320>') {
+                                const body = message.body;
+                                console.log(body.toBoc().toString());
+                                if (body) {
+                                    try {
+                                        const slice = body.beginParse();
+                                        const basic = slice.loadRef().beginParse();
+                                        const relay = basic.loadUint(8);
+                                        const msgType = basic.loadUint(8);
+                                        const fromId = basic.loadUint(64);
+                                        const toChain = basic.loadUint(64);
+                                        const gasLimit = basic.loadUint(64);
+                                        // const initiator = basic.loadAddress();
+                                        const initiator = basic.loadUintBig(33 * 8);
+                                        // const sender = basic.loadAddress();
+                                        const sender = basic.loadUintBig(33 * 8);
+
+                                        const ts = slice.loadRef().beginParse();
+                                        const target = ts.loadUintBig(512);
+                                        const payload = ts.loadRef().beginParse().loadUintBig(256);
+
+                                        const meta = slice.loadRef().beginParse();
+                                        const fullOrderIid = meta.loadUintBig(256);
+                                        const mos = meta.loadAddress();
+                                        const token = meta.loadAddress();
+                                        const tokenAmount = meta.loadUintBig(128);
+                                        console.table([
+                                            { relay, msgType, fromId, toChain, gasLimit, initiator, sender },
+                                        ]);
+                                        console.table([{ target, payload }]);
+                                        console.table([
+                                            {
+                                                fullOrderIid,
+                                                mos,
+                                                token,
+                                                tokenAmount,
+                                            },
+                                        ]);
+                                    } catch (error) {
+                                        console.error('Error parsing message body:', error);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    });
+
     it('call message out', async () => {
         const messager = await blockchain.treasury('message_out');
 
@@ -86,10 +150,14 @@ describe('Bridge', () => {
             relay: false,
             msgType: 0,
             toChain: bnbId,
-            target: BigInt(0x70997970c51812dc3a010c7d01b50e0d17dc79c8),
+            target: beginCell()
+                .storeUint(BigInt(0x70997970c51812dc3a010c7d01b50e0d17dc79c8), 256)
+                .endCell()
+                .beginParse(),
             payload: 'message',
             gasLimit: 200000000,
             value: toNano('0.06'),
+            initiator: Address.parse('0QBE2Qs7ub-3frxnGOWFfwBdVqUSeAv2NPl4KgdeC7TJMnNG'),
         });
 
         expect(messageOutResult.transactions).toHaveTransaction({
@@ -116,8 +184,9 @@ describe('Bridge', () => {
 
     it('parse message out event', async () => {
         const body = Cell.fromHex(
-            'b5ee9c7201010301008d0001a30004d50200000001000000000000003831f0584c4d03277b26b8a006dbbfa095512de07017f981dc4614797bc600a5478013901072cbe28d212d321e4fb20585b395db95869b19002f9bf0dd54ca922023f00101640000000000000000003800000000000000000000000070997970c5181400000000000000000000000000000000000bebc20002000201',
+            // 'b5ee9c7201010301008d0001a30004d50200000001000000000000003831f0584c4d03277b26b8a006dbbfa095512de07017f981dc4614797bc600a5478013901072cbe28d212d321e4fb20585b395db95869b19002f9bf0dd54ca922023f00101640000000000000000003800000000000000000000000070997970c5181400000000000000000000000000000000000bebc20002000201',
             // 'b5ee9c7201010301008d0001a30004d502000000010000000000000038434ebe756ac67e4a5b199e7b54b8a9f1c9c8713f792401ec8fd12f08bddc064b8013901072cbe28d212d321e4fb20585b395db95869b19002f9bf0dd54ca922023f00101640000000000000000003800000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8000000000bebc20002000201',
+            'b5ee9c720101030100ac0001a30004d502000000010000000000000038355a6d7418c0bf61cabeeba35cfa21000a5ed3fc54a400a215fbb1c7f7f4855e8013901072cbe28d212d321e4fb20585b395db95869b19002f9bf0dd54ca922023f00101640000000000000000003800000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8000000000bebc200020040000000000000000000000000000000000000000000003199e761efebf4000000',
         );
 
         const ds = body.beginParse();
@@ -133,7 +202,7 @@ describe('Bridge', () => {
         const toChain = argsDS.loadUint(64);
         const target = argsDS.loadUintBig(256);
         const rrr = argsDS.loadRef();
-        const payload = rrr.beginParse().loadUint(8);
+        const payload = rrr.beginParse().loadUintBig(256);
         const gasLimit = argsDS.loadUint(64);
         console.table([{ fid, tid, orderId, sender }]);
         console.table([{ relay, msgType, toChain, target: target.toString(16), payload, gasLimit }]);
@@ -260,6 +329,44 @@ describe('Bridge', () => {
         //     to: bridge.address,
         //     success: true,
         // });
+    });
+    it('should verify by r,v,s', async () => {
+        const signature =
+            '0x8d5d654efc4def81f34eb58507cdc91a0c78f833742e345423917840b49b2b1a1cb41825a847cb99b8c2c853e10c6d2d7ae6c7035346ccca8572c963e42893671b';
+        const beforeHash =
+            '0xbf74b3ed582ac731d1cd0c4aa0a272feb293f27858e5e4a942e1559625d1550863ef8f81f37c748d528d574938f44f82d376c8caf8b7b2bcc78f9aed85db214a0000000000000000000000000000000000000000000000000000000000c5099c0000000000000000000000000000000000000000000000000000000000000089';
+        const hash = '0x1852f796d47a946139808b1749ae129a132fd7d3fbed34f1aa312edf7f3a2cd9';
+
+        const receiptRoot = '0x972ffee54242d4feb376307deca961f0895db675a281ae78dd320bf1f51595af';
+        const version = '0x29de751901b431127a4bedd2c75660930cab189266ce166daf73e38f9d0f979c';
+        const blockNum = 12392013;
+        const chainId = 212;
+
+        const v = 28;
+        const r = 75430627222101948001170034635586933565787801268069840188024840834445008222714;
+        const s = 35190673124364824159006605775776496298734982579896935741638983811508232654080;
+        const signer = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+        const verifier = await blockchain.treasury('verifier');
+
+        const increaseResult = await bridge.sendMessageIn(verifier.getSender(), {
+            value: toNano('0.05'),
+            hash: BigInt(hash),
+            v: BigInt(v),
+            r: BigInt(r),
+            s: BigInt(s),
+            receiptRoot: BigInt(receiptRoot),
+            version: BigInt(version),
+            blockNum,
+            chainId,
+            addr: BigInt('0x800031F0f47e0D4Aaed6e0d2505596447395f848'),
+            topics: [
+                BigInt('0xf01fbdd2fdbc5c2f201d087d588789d600e38fe56427e813d9dced2cdb25bcac'),
+                BigInt('0x643b809c63485b21b8c56bbf6146ff9d13a0d56c0b723fcabdc6dfd9c9b37ee9'),
+                BigInt('0x00000000000000d40004d5020000000200000000000000000000000000000000'),
+            ],
+            message: beginCell().endCell().beginParse(),
+            expectedAddress: BigInt(signer),
+        });
     });
     // 0x04ae84e575adbb682cb2412874cc0cf36eb16fc8b677dd33d9a7f46936ca83c76888f166eb775fad2cf8f05867b66b95f5696d78a183676bdc53210fd88dd85c68
     it('should verify pass', async () => {
