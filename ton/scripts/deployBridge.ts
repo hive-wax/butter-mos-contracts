@@ -14,7 +14,7 @@ export async function run(provider: NetworkProvider) {
         ),
     );
 
-    await bridge.sendDeploy(provider.sender(), toNano('0.05'));
+    await bridge.sendDeploy(provider.sender(), toNano('0.08'));
 
     await provider.waitForDeploy(bridge.address);
 

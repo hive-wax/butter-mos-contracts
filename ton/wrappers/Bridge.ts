@@ -137,10 +137,10 @@ export class Bridge implements Contract {
                 .storeUint(opts.relay ? 1 : 0, 8)
                 .storeUint(opts.msgType, 8)
                 .storeUint(opts.toChain, 64)
+                .storeAddress(opts.initiator)
                 .storeSlice(opts.target)
                 .storeUint(opts.gasLimit, 64)
-                .storeAddress(opts.initiator)
-                .storeRef(beginCell().storeUint(234234982374982374982374, 256).endCell())
+                .storeRef(beginCell().storeUint(BigInt('234234982374982374982374'), 256).endCell())
                 .endCell(),
         });
     }

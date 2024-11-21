@@ -27,13 +27,15 @@
     int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
 
     if (op == op::message_out) {
-
         int relay = in_msg_body~load_uint(8);
         int msg_type = in_msg_body~load_uint(8);
         int to_chain = in_msg_body~load_uint(64);
-        slice target = in_msg_body~load_bits(512);
-        int gas_limit = in_msg_body~load_uint(64);
         slice initiator = in_msg_body~load_msg_addr();
+
+        int remaining_bits = slice_bits(in_msg_body) - 64;
+        slice target = in_msg_body~load_bits(remaining_bits);
+
+        int gas_limit = in_msg_body~load_uint(64);
 
         cell payload = in_msg_body~load_ref();
 
@@ -53,10 +55,8 @@
                     .store_slice(sender_address)
                     .end_cell()
                 )
-                .store_ref(begin_cell()
-                    .store_slice(target)
-                    .store_ref(payload).end_cell()
-                )
+                .store_ref(begin_cell().store_slice(target).end_cell())
+                .store_ref(payload)
                 .store_ref(begin_cell()
                     .store_uint(full_order_id, 256)
                     .store_slice(my_address)

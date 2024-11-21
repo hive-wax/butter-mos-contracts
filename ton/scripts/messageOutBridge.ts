@@ -18,13 +18,8 @@ export async function run(provider: NetworkProvider, args: string[]) {
 
     const target =
         '613062383639393163363231386233366331643139643461326539656230636533363036656234382E666163746F72792E6272696467652E6E656172';
-    const highHex = target.slice(0, 64);
-    const lowHex = target.slice(64);
 
-    const t = beginCell()
-        .storeUint(BigInt('0x' + highHex), 256)
-        .storeUint(BigInt('0x' + lowHex), 256)
-        .endCell();
+    const t = beginCell().storeBuffer(Buffer.from(target, 'hex')).endCell();
 
     await bridge.sendMessageOut(provider.sender(), {
         relay: false,
