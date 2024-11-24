@@ -44,7 +44,7 @@ cell msg = begin_cell()
     .store_slice(bridge_addr)
     .store_coins(50000000) ;; 0.05 TON for fees
     .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-    .store_slice(body)
+    .store_ref(body)
     .end_cell();
 ```
 
