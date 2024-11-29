@@ -1,5 +1,5 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Address, beginCell, Cell, ExternalAddress, Message, toNano, Transaction } from '@ton/core';
+import { Address, beginCell, Cell, ExternalAddress, Message, toNano } from '@ton/core';
 import { Bridge } from '../wrappers/Bridge';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
@@ -16,13 +16,13 @@ import {
     recoverPublicKey,
     size,
     stringToHex,
-    toBytes,
     toPrefixedMessage,
-    verifyMessage,
 } from 'viem';
 import { privateKeyToAccount, publicKeyToAddress } from 'viem/accounts';
 import { EventMessageSent } from '@ton/sandbox/dist/event/Event';
 import { generateTonClient } from '../utils/ton';
+import { PayloadCodec } from '../utils/payload';
+import { parseMessageOutEvent } from '../utils/bridge';
 
 function hexToUint8Array(hexString: string) {
     return new Uint8Array(Buffer.from(hexString.startsWith('0x') ? hexString.slice(2) : hexString, 'hex'));
@@ -63,65 +63,36 @@ describe('Bridge', () => {
         });
     });
 
-    it('parse args', async () => {
-        const cell = Cell.fromHex(
-            'b5ee9c72010207010001fc0001a30004d50200000001bda600000000000090cbf6e915512da91e150b415778ac36c93180b12cad7cd2344296748680ebb7800c37132f9adaff0351976e2bbd253351a38c1abd7b335923ddcc60142c8fa7dc1001016cde8ebda60000000000000000d0d10000000000000000000000002a60d10b97142d0cbae86c6f6955877bc49371fd000000000bebc2000201c096a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc70000000000000000000000000000000000000000000000000004d50200000002000000000000000000000000000000000000000000000000000000000000d0d10301c0f723e983d1cfc0da138b9046e03ca500dbe8a23e12b960c415ad423615180ecb00000000000000000000000000003e7c2ad7cef1bc1d6d44cdd9c0049bccf6b300000000000000000000000000000000000000000000000000000000000000030401c0193bb46ed27c781840178f1a46a5d76b9c6f74e537e409f0e10b8ca3521930070000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000000000000000000050180000000000000000000000000214a066594ee53a216aad7c776b31b4eb3766de60000000000000000000000000000000000000000000000000000000000000000060000',
-        );
+    it('encode payload', async () => {
+        const codec = new PayloadCodec();
 
-        const ds = cell.beginParse();
-        const relay = ds.loadUint(8);
-        const msgType = ds.loadUint(8);
-        const toChain = ds.loadUint(64);
-        console.log(relay, msgType, toChain);
+        const data =
+            '0x1de78eb8658305a581b2f1610c96707b0204d5cba6a782b313672045fa5a87c800000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000002101c6c3c3336cfe7cafd442fe1ba668142bcf49ac868e79b6687c3717587c20d02100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001449d6dae5d59b3af296df35bdc565371c8a563ef6000000000000000000000000';
+        const encoded = codec.encode(data);
+        const decoded = codec.decode(encoded);
+        expect(data).toBe(decoded);
     });
 
     it('parse tx', async () => {
         const client = generateTonClient();
-        const address = Address.parse('EQDGw8MzbP58r9RC_humaBQrz0msho55tmh8NxdYfCDQIZ9S');
+        const address = Address.parse('kQAr_70VT55zhjTWGODI9JKFMeP4XEdfyTRGHyzPGL_l5SeP');
+        let i = 0;
         try {
             const transactions = await client.getTransactions(address, { limit: 10 });
             for (const tx of transactions) {
+                if (i !== 2) {
+                    i++;
+                    continue;
+                }
                 if (tx.outMessages.size > 0) {
                     tx.outMessages.values().forEach((message: Message, key: number) => {
                         if (message.info.dest && message.info.dest instanceof ExternalAddress) {
                             if (message.info.dest.toString() === 'External<256:883417320>') {
                                 const body = message.body;
-                                console.log(body.toBoc().toString());
                                 if (body) {
                                     try {
-                                        const slice = body.beginParse();
-                                        const basic = slice.loadRef().beginParse();
-                                        const relay = basic.loadUint(8);
-                                        const msgType = basic.loadUint(8);
-                                        const fromId = basic.loadUint(64);
-                                        const toChain = basic.loadUint(64);
-                                        const gasLimit = basic.loadUint(64);
-                                        // const initiator = basic.loadAddress();
-                                        const initiator = basic.loadUintBig(33 * 8);
-                                        // const sender = basic.loadAddress();
-                                        const sender = basic.loadUintBig(33 * 8);
-
-                                        const ts = slice.loadRef().beginParse();
-                                        const target = ts.loadUintBig(512);
-                                        const payload = ts.loadRef().beginParse().loadUintBig(256);
-
-                                        const meta = slice.loadRef().beginParse();
-                                        const fullOrderIid = meta.loadUintBig(256);
-                                        const mos = meta.loadAddress();
-                                        const token = meta.loadAddress();
-                                        const tokenAmount = meta.loadUintBig(128);
-                                        console.table([
-                                            { relay, msgType, fromId, toChain, gasLimit, initiator, sender },
-                                        ]);
-                                        console.table([{ target, payload }]);
-                                        console.table([
-                                            {
-                                                fullOrderIid,
-                                                mos,
-                                                token,
-                                                tokenAmount,
-                                            },
-                                        ]);
+                                        const event = parseMessageOutEvent(body);
+                                        console.table([event]);
                                     } catch (error) {
                                         console.error('Error parsing message body:', error);
                                     }
@@ -152,7 +123,7 @@ describe('Bridge', () => {
                 .storeUint(BigInt(0x70997970c51812dc3a010c7d01b50e0d17dc79c8), 256)
                 .endCell()
                 .beginParse(),
-            payload: 'message',
+            payload: beginCell().endCell(),
             gasLimit: 200000000,
             value: toNano('0.06'),
             initiator: Address.parse('0QBE2Qs7ub-3frxnGOWFfwBdVqUSeAv2NPl4KgdeC7TJMnNG'),
@@ -180,33 +151,6 @@ describe('Bridge', () => {
         expect(orderIdAfter).toBe(orderIdBefore + 1);
     });
 
-    it('parse message out event', async () => {
-        const body = Cell.fromHex(
-            // 'b5ee9c7201010301008d0001a30004d50200000001000000000000003831f0584c4d03277b26b8a006dbbfa095512de07017f981dc4614797bc600a5478013901072cbe28d212d321e4fb20585b395db95869b19002f9bf0dd54ca922023f00101640000000000000000003800000000000000000000000070997970c5181400000000000000000000000000000000000bebc20002000201',
-            // 'b5ee9c7201010301008d0001a30004d502000000010000000000000038434ebe756ac67e4a5b199e7b54b8a9f1c9c8713f792401ec8fd12f08bddc064b8013901072cbe28d212d321e4fb20585b395db95869b19002f9bf0dd54ca922023f00101640000000000000000003800000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8000000000bebc20002000201',
-            // 'b5ee9c720101030100ac0001a30004d502000000010000000000000038355a6d7418c0bf61cabeeba35cfa21000a5ed3fc54a400a215fbb1c7f7f4855e8013901072cbe28d212d321e4fb20585b395db95869b19002f9bf0dd54ca922023f00101640000000000000000003800000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8000000000bebc200020040000000000000000000000000000000000000000000003199e761efebf4000000',
-            'b5ee9c72010207010001fc0001a30004d50200000001bda600000000000090cbf6e915512da91e150b415778ac36c93180b12cad7cd2344296748680ebb7800c37132f9adaff0351976e2bbd253351a38c1abd7b335923ddcc60142c8fa7dc1001016cde8ebda60000000000000000d0d10000000000000000000000002a60d10b97142d0cbae86c6f6955877bc49371fd000000000bebc2000201c096a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc70000000000000000000000000000000000000000000000000004d50200000002000000000000000000000000000000000000000000000000000000000000d0d10301c0f723e983d1cfc0da138b9046e03ca500dbe8a23e12b960c415ad423615180ecb00000000000000000000000000003e7c2ad7cef1bc1d6d44cdd9c0049bccf6b300000000000000000000000000000000000000000000000000000000000000030401c0193bb46ed27c781840178f1a46a5d76b9c6f74e537e409f0e10b8ca3521930070000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000000000000000000050180000000000000000000000000214a066594ee53a216aad7c776b31b4eb3766de60000000000000000000000000000000000000000000000000000000000000000060000',
-        );
-
-        const ds = body.beginParse();
-        const fromId = ds.loadUintBig(64);
-        const toId = ds.loadUintBig(64);
-        const orderId = ds.loadUintBig(256);
-        const sender = ds.loadAddress();
-        const args = ds.loadRef();
-        console.log(args.toString());
-        const argsDS = args.beginParse();
-        const relay = argsDS.loadUint(8);
-        const msgType = argsDS.loadUint(8);
-        const toChain = argsDS.loadUintBig(64);
-        const target = argsDS.loadUintBig(256);
-        const rrr = argsDS.loadRef();
-        const payload = rrr.beginParse().loadUintBig(256);
-        const gasLimit = argsDS.loadUintBig(64);
-        console.table([{ fromId, toId, orderId, sender }]);
-        console.table([{ relay, msgType, toChain, target: target.toString(16), payload, gasLimit }]);
-    });
-
     it('sign and verify with viem', async () => {
         const content =
             '0xbf74b3ed582ac731d1cd0c4aa0a272feb293f27858e5e4a942e1559625d1550863ef8f81f37c748d528d574938f44f82d376c8caf8b7b2bcc78f9aed85db214a0000000000000000000000000000000000000000000000000000000000c5099c0000000000000000000000000000000000000000000000000000000000000089';
@@ -221,7 +165,7 @@ describe('Bridge', () => {
         console.log(address, account.address);
     });
 
-    it('verify', async () => {
+    it('verify using viem', async () => {
         const content =
             '0xbf74b3ed582ac731d1cd0c4aa0a272feb293f27858e5e4a942e1559625d1550863ef8f81f37c748d528d574938f44f82d376c8caf8b7b2bcc78f9aed85db214a0000000000000000000000000000000000000000000000000000000000c5099c0000000000000000000000000000000000000000000000000000000000000089';
         const hash = '0xfc40624617cb3100f38078c399e926bf725181f9b9168d245e7a0139f0b65996';

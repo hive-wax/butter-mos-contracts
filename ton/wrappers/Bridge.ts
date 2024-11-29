@@ -123,7 +123,7 @@ export class Bridge implements Contract {
             msgType: number;
             toChain: bigint;
             target: Slice;
-            payload: string;
+            payload: Cell;
             initiator: Address;
             gasLimit: number;
         },
@@ -140,7 +140,7 @@ export class Bridge implements Contract {
                 .storeAddress(opts.initiator)
                 .storeSlice(opts.target)
                 .storeUint(opts.gasLimit, 64)
-                .storeRef(beginCell().storeUint(BigInt('234234982374982374982374'), 256).endCell())
+                .storeRef(opts.payload)
                 .endCell(),
         });
     }
