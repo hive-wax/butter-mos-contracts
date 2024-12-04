@@ -1,14 +1,5 @@
 #include "imports/stdlib.fc";
-#include "imports/crypto.fc";
 #include "imports/params.fc";
-#include "imports/message.fc";
-#include "imports/error_codes.fc";
-#include "imports/utils.fc";
-
-#include "data.fc";
-#include "in.func";
-#include "out.fc";
-#include "notification.fc";
 
 ;; recv_internal is the main function of the contract and is called when it receives a message from other contracts
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
@@ -27,22 +18,9 @@
     int op = in_msg_body~load_uint(32); ;; by convention, the first 32 bits of incoming message is the op
     int query_id = in_msg_body~load_uint(64); ;; also by convention, the next 64 bits contain the "query id", although this is not always the case
 
-    if (op == op::message_out) {
-        handle_message_out(in_msg_body, sender_address, addr_none(), 0);
-    } elseif(op == op::message_in) {
-        handle_message_in(in_msg_body);
-    } elseif (op == op::transfer_notification) {
-        handle_transfer_notification(sender_address, in_msg_body);
+    if (op == op::mapo_execute) {
+        return ();
     } else {
         throw(0xffff); ;; if the message contains an op that is not known to this contract, we throw
     }
-}
-
-;; get methods are a means to conveniently read contract data using, for example, HTTP APIs
-;; they are marked with method_id
-;; note that unlike in many other smart contract VMs, get methods cannot be called by other contracts
-
-int get_order_nonce() method_id {
-    (int order_nonce)  = load_data();
-    return order_nonce;
 }

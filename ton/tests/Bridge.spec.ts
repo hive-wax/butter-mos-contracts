@@ -23,6 +23,7 @@ import { EventMessageSent } from '@ton/sandbox/dist/event/Event';
 import { generateTonClient } from '../utils/ton';
 import { PayloadCodec } from '../utils/payload';
 import { parseMessageOutEvent } from '../utils/bridge';
+import { MessageEncoder } from '../utils/evm-message';
 
 function hexToUint8Array(hexString: string) {
     return new Uint8Array(Buffer.from(hexString.startsWith('0x') ? hexString.slice(2) : hexString, 'hex'));
@@ -75,15 +76,10 @@ describe('Bridge', () => {
 
     it('parse tx', async () => {
         const client = generateTonClient();
-        const address = Address.parse('kQAr_70VT55zhjTWGODI9JKFMeP4XEdfyTRGHyzPGL_l5SeP');
-        let i = 0;
+        const address = Address.parse('EQBSmvVPaoRWTfvls1cVJ1aOjCHX9o9vgRdNc24UlYzMX_6F');
         try {
             const transactions = await client.getTransactions(address, { limit: 10 });
             for (const tx of transactions) {
-                if (i !== 2) {
-                    i++;
-                    continue;
-                }
                 if (tx.outMessages.size > 0) {
                     tx.outMessages.values().forEach((message: Message, key: number) => {
                         if (message.info.dest && message.info.dest instanceof ExternalAddress) {
@@ -238,7 +234,7 @@ describe('Bridge', () => {
     it('message in', async () => {
         const signature =
             '0xa6c438d86c9f4f5b210a6fb8dc8d3a9533350d49fb905a889c0cfef80880b9fa4dcd3713ff4b79cc9d7d66c146015ba9356fbc9975cd27658b21a3f1097e0d001c';
-        const hash = '0x1852f796d47a946139808b1749ae129a132fd7d3fbed34f1aa312edf7f3a2cd9';
+        const hash = '0xa360fee536c92c9b3f0f829df71e3b2701bc50aeba5eedfffd5e4b0e87b5d12a';
 
         const receiptRoot = '0x972ffee54242d4feb376307deca961f0895db675a281ae78dd320bf1f51595af';
         const version = '0x29de751901b431127a4bedd2c75660930cab189266ce166daf73e38f9d0f979c';
@@ -278,23 +274,27 @@ describe('Bridge', () => {
             '0x8d5d654efc4def81f34eb58507cdc91a0c78f833742e345423917840b49b2b1a1cb41825a847cb99b8c2c853e10c6d2d7ae6c7035346ccca8572c963e42893671b';
         const beforeHash =
             '0xbf74b3ed582ac731d1cd0c4aa0a272feb293f27858e5e4a942e1559625d1550863ef8f81f37c748d528d574938f44f82d376c8caf8b7b2bcc78f9aed85db214a0000000000000000000000000000000000000000000000000000000000c5099c0000000000000000000000000000000000000000000000000000000000000089';
-        const hash = '0x1852f796d47a946139808b1749ae129a132fd7d3fbed34f1aa312edf7f3a2cd9';
+        const hash = '0xa360fee536c92c9b3f0f829df71e3b2701bc50aeba5eedfffd5e4b0e87b5d12a';
 
-        const receiptRoot = '0x972ffee54242d4feb376307deca961f0895db675a281ae78dd320bf1f51595af';
+        const receiptRoot = '0xb6bcbf53737f6ab8f445bf3c239d094479761fd33ecf037d1055efaa6a2b651e';
         const version = '0x29de751901b431127a4bedd2c75660930cab189266ce166daf73e38f9d0f979c';
-        const blockNum = 12392013;
+        const blockNum = 13079341;
         const chainId = 212;
 
-        const v = 28;
-        const r = 75430627222101948001170034635586933565787801268069840188024840834445008222714;
-        const s = 35190673124364824159006605775776496298734982579896935741638983811508232654080;
+        const v = 27;
+        const r = 5794872961185507680446482155248218357133955828933891657037524015502479647096;
+        const s = 42092741254761632890519917402352136658951078687571450504999762260334904276659;
         const signer = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
         const verifier = await blockchain.treasury('verifier');
 
+        const message =
+            '0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001fe1001142114150180000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001db8d7286adcbe3c9ae26a3521673cdb5a7a3edd3f1ddbf4198b3223eb1b0d4358c8afd3ff50c4d8e0323815b29e510a77d2c41fd008c8afd3ff50c4d8e0323815b29e510a77d2c41fd1de78eb8658305a581b2f1610c96707b0204d5cba6a782b313672045fa5a87c800000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000001449d6dae5d59b3af296df35bdc565371c8a563ef6000000000000000000000000000000000000000000000000000000000000000000000000000000000000002101c6c3c3336cfe7cafd442fe1ba668142bcf49ac868e79b6687c3717587c20d021000000000000000000000000000000000000000000000000000000000000000000';
+        const coder = new MessageEncoder();
+
         const increaseResult = await bridge.sendMessageIn(verifier.getSender(), {
-            value: toNano('0.05'),
+            value: toNano('0.1'),
             hash: BigInt(hash),
-            v: BigInt(v),
+            v: BigInt(v - 27),
             r: BigInt(r),
             s: BigInt(s),
             receiptRoot: BigInt(receiptRoot),
@@ -304,10 +304,10 @@ describe('Bridge', () => {
             addr: BigInt('0x800031F0f47e0D4Aaed6e0d2505596447395f848'),
             topics: [
                 BigInt('0xf01fbdd2fdbc5c2f201d087d588789d600e38fe56427e813d9dced2cdb25bcac'),
-                BigInt('0x643b809c63485b21b8c56bbf6146ff9d13a0d56c0b723fcabdc6dfd9c9b37ee9'),
-                BigInt('0x00000000000000d40004d5020000000200000000000000000000000000000000'),
+                BigInt('0xfa037b12145f7ec8a74d97ba2e09a9ea4d64147aedfada83d38986706edc88cb'),
+                BigInt('0x0000000000aa36a70004d502000000020000000000000000000000000007a120'),
             ],
-            message: beginCell().endCell().beginParse(),
+            message: coder.encode(message),
             expectedAddress: BigInt(signer),
         });
     });

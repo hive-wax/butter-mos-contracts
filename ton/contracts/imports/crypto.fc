@@ -52,8 +52,8 @@ int pubkey_to_eth_address(int x1, int x2) {
     ;; slice x1 = convert_hash_to_hex_string(x1, 0);
     ;; slice x2 = convert_hash_to_hex_string(x2, 0);
     ;; prefix~dump();
-    x1r~dump();
-    x2r~dump();
+    ;; x1r~dump();
+    ;; x2r~dump();
 
     slice pubkey = begin_cell().store_uint(x1, 256).store_uint(x2, 256).end_cell().begin_parse();
 

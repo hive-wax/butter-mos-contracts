@@ -19,8 +19,8 @@ export const parseMessageOutEvent = (body: Cell) => {
 
     const meta = slice.loadRef().beginParse();
     const fullOrderIid = meta.loadUintBig(256);
-    const mos = meta.loadAddress();
-    const token = meta.loadAddress();
+    const mos = meta.loadUintBig(256);
+    const token = meta.loadMaybeAddress();
     const tokenAmount = meta.loadUintBig(128);
 
     return {

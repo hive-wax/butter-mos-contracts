@@ -63,7 +63,7 @@ export class Bridge implements Contract {
             chainId: number;
             addr: bigint;
             topics: bigint[];
-            message: Slice;
+            message: Cell;
             expectedAddress: bigint;
         },
     ) {
@@ -106,7 +106,7 @@ export class Bridge implements Contract {
                                 .storeUint(opts.topics[2], 256)
                                 .endCell(),
                         )
-                        .storeSlice(opts.message)
+                        .storeRef(opts.message)
                         .endCell(),
                 )
                 .storeUint(opts.expectedAddress, 160)
