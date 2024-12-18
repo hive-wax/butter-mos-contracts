@@ -29,6 +29,15 @@
 
     if (op == op::message_out) {
         handle_message_out(in_msg_body, sender_address, addr_none(), 0);
+    } elseif(op == op::test_call_mapo_execute) {
+        slice to = in_msg_body~load_bits(267);
+        int gas_limit = in_msg_body~load_uint(64);
+        cell payload = in_msg_body~load_ref();
+        call_mapo_execute(to, gas_limit, payload);
+    } elseif(op == op::upgrade) {
+        cell new_code = in_msg_body~load_ref();
+        set_code(new_code);
+        set_c3(new_code.begin_parse().bless());
     } elseif(op == op::message_in) {
         handle_message_in(in_msg_body);
     } elseif (op == op::transfer_notification) {

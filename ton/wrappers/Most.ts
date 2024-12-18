@@ -1,27 +1,27 @@
 import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
 
-export type TargetExampleConfig = {
+export type MostConfig = {
     orderNonce: number;
 };
 
-export function targetExampleConfigToCell(config: TargetExampleConfig): Cell {
+export function mostConfigToCell(config: MostConfig): Cell {
     return beginCell().storeUint(config.orderNonce, 256).endCell();
 }
 
-export class TargetExample implements Contract {
+export class Most implements Contract {
     constructor(
         readonly address: Address,
         readonly init?: { code: Cell; data: Cell },
     ) {}
 
     static createFromAddress(address: Address) {
-        return new TargetExample(address);
+        return new Most(address);
     }
 
-    static createFromConfig(config: TargetExampleConfig, code: Cell, workchain = 0) {
-        const data = targetExampleConfigToCell(config);
+    static createFromConfig(config: MostConfig, code: Cell, workchain = 0) {
+        const data = mostConfigToCell(config);
         const init = { code, data };
-        return new TargetExample(contractAddress(workchain, init), init);
+        return new Most(contractAddress(workchain, init), init);
     }
 
     async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {

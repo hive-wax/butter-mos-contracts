@@ -1,6 +1,7 @@
 import {
     Address,
     beginCell,
+    BitBuilder,
     Cell,
     Contract,
     contractAddress,
@@ -22,6 +23,8 @@ export const Opcodes = {
     increase: 0x7e8764ef,
     messageIn: 0xd5f86120,
     messageOut: 0x136a3529,
+    upgradeCode: 0xdbfaf817,
+    testMapoExecute: 0x104dd201,
 };
 
 export class Bridge implements Contract {
@@ -74,6 +77,7 @@ export class Bridge implements Contract {
                 .storeUint(Opcodes.messageIn, 32)
                 .storeUint(0, 64)
                 .storeUint(opts.hash ?? 0, 256)
+                .storeUint(opts.expectedAddress, 160)
                 .storeUint(1, 8) // signature number
                 .storeRef(
                     beginCell()
@@ -109,7 +113,6 @@ export class Bridge implements Contract {
                         .storeRef(opts.message)
                         .endCell(),
                 )
-                .storeUint(opts.expectedAddress, 160)
                 .endCell(),
         });
     }
@@ -141,6 +144,56 @@ export class Bridge implements Contract {
                 .storeSlice(opts.target)
                 .storeUint(opts.gasLimit, 64)
                 .storeRef(opts.payload)
+                .endCell(),
+        });
+    }
+
+    async sendUpgradeCode(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+            code: Cell;
+        },
+    ) {
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell().storeUint(Opcodes.upgradeCode, 32).storeUint(0, 64).storeRef(opts.code).endCell(),
+        });
+    }
+
+    async sendTestMapoExecute(
+        provider: ContractProvider,
+        via: Sender,
+        opts: {
+            value: bigint;
+        },
+    ) {
+        const builder = new BitBuilder();
+
+        builder.writeUint(2, 2);
+
+        builder.writeUint(0, 1);
+
+        builder.writeInt(0, 8);
+
+        const addressHex = '93f46bff194047c851b516c214965070076f3b207692f0a1675ddf1a172f2877';
+
+        const addressBuffer = Buffer.from(addressHex, 'hex');
+        builder.writeBuffer(addressBuffer);
+
+        console.log(builder.length);
+
+        await provider.internal(via, {
+            value: opts.value,
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: beginCell()
+                .storeUint(Opcodes.testMapoExecute, 32)
+                .storeUint(0, 64)
+                .storeBits(builder.build())
+                .storeUint(50000000, 64)
+                .storeRef(beginCell().endCell())
                 .endCell(),
         });
     }

@@ -3,7 +3,10 @@
 ## Contracts
 
 ### Bridge Testnet
-kQAr_70VT55zhjTWGODI9JKFMeP4XEdfyTRGHyzPGL_l5SeP
+EQD3Wjz6cPIMUp6utrbZZmd_GEBxEAgJSafnoSWItnk5PuFA
+
+### Test target contract
+EQCT9Gv_GUBHyFG1FsIUllBwB287IHaS8KFnXd8aFy8od9QL
 
 ## Functions
 
