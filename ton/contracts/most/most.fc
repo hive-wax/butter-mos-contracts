@@ -22,6 +22,88 @@
     );
 }
 
+const int MAX_BITS_PER_CELL = 1016;  ;; Maximum bits per cell
+
+;; Helper to load large uint across multiple cells
+(slice, int) load_large_uint(slice s, int total_bits) {
+    slice current = s;
+    int result = 0;
+
+    ;; If we don't have enough bits in current cell, load next cell
+    if (slice_bits(current) < total_bits) {
+        throw_unless(35, current.slice_refs() > 0);
+        current = current~load_ref().begin_parse();
+    }
+
+    result = current~load_uint(total_bits);
+    return (current, result);
+}
+
+;; Helper to load large bytes across multiple cells
+(slice, slice) load_large_bytes(slice s, int byte_length) {
+    int total_bits = byte_length * 8;
+    builder result = begin_cell();
+    slice current = s;
+
+    while (total_bits > 0) {
+        int available_bits = slice_bits(current);
+        int bits_to_read = min(total_bits, available_bits);
+
+        slice bits = current~load_bits(bits_to_read);
+        result = store_slice(result, bits);
+        total_bits -= bits_to_read;
+
+        if (total_bits > 0) {
+            throw_unless(35, current.slice_refs() > 0);
+            current = current~load_ref().begin_parse();
+        }
+    }
+
+    return (current, result.end_cell().begin_parse());
+}
+
+;; Extract specific fields from payload
+(int, slice) extract_fields(cell payload) {
+    slice ps = payload.begin_parse();
+
+    ;; First cell (1016 bits)
+    ps~skip_bits(1016);
+
+    ;; Move to second cell
+    ps = ps~load_ref().begin_parse();
+
+    ;; Skip remaining 264 bits from first 5 fields
+    ps~skip_bits(264);
+
+    ;; Read amount
+    int amount = ps~load_uint(256);
+    ;; amount~dump();
+
+    ;; In second cell we have 752 bits available (1016 - 264)
+    ;; We need to skip: decimals(256) + from_len(256) + from_address(160) = 672 bits
+    ps~skip_bits(496);
+
+    ;; Move to third cell for to_len and to_bytes
+    ps = ps~load_ref().begin_parse();
+
+    ;; Skip to_len
+    ps~dump();
+    ps~skip_bits(528);
+
+    ;; Read to_address (33 bytes = 264 bits)
+    slice to_addr = ps~load_bits(264);
+    to_addr~dump();
+
+    builder addr_builder = begin_cell()
+        .store_uint(2, 2)
+        .store_uint(0, 1)  ;; anycast
+        .store_slice(to_addr);     ;; workchain + address (264 bits)
+
+    slice full_addr = addr_builder.end_cell().begin_parse();
+
+    return (amount, full_addr);
+}
+
 (slice, int) decode_to_address_and_amount(slice payload) {
     payload~skip_bits(256); ;; Skip INTERCHAIN_TRANSFER
     payload~skip_bits(160); ;; Skip fromAddress
@@ -63,7 +145,11 @@
         slice sender_address = in_msg_body~load_msg_addr();  ;; Recipient address
         int order_id = in_msg_body~load_uint(256);      ;; Amount to mint
         cell payload = in_msg_body~load_ref();          ;; Payload
-        (slice to_user_address, int amount) = decode_to_address_and_amount(payload.begin_parse());
+        order_id~dump();
+        ;; (slice to_user_address, int amount) = decode_to_address_and_amount(payload.begin_parse());
+        (int amount, slice to_user_address) = extract_fields(payload);
+        amount~dump();
+        to_user_address~dump();
 
         ;; Prepare mint message for Jetton master
         cell mint_msg = begin_cell()
