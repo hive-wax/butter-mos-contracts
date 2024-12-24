@@ -25,6 +25,8 @@ export const Opcodes = {
     messageOut: 0x136a3529,
     upgradeCode: 0xdbfaf817,
     testMapoExecute: 0x104dd201,
+    mapoExecute: 0xa5b6af5b,
+    setJettonMaster: 0x3b29cf9f,
 };
 
 export class Bridge implements Contract {

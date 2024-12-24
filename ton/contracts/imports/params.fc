@@ -10,6 +10,7 @@ const int op::message_out = "op::message_out"c;
 const int op::mapo_execute = "op::mapo_execute"c;
 const int op::upgrade = "op::upgrade"c;
 const int op::test_call_mapo_execute = "op::test_call_mapo_execute"c;
+const int op::set_jetton_master = "op::set_jetton_master"c;
 
 const int op::transfer_notification = 0x7362d09c;
 

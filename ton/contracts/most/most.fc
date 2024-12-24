@@ -41,22 +41,24 @@
 
     if (op == op::mapo_execute) {
         ;; Parse cross-chain mint parameters
-        slice to_address = in_msg_body~load_msg_addr();  ;; Recipient address
-        int amount = in_msg_body~load_coins();          ;; Amount to mint
+        int from_id = in_msg_body~load_uint(64);
+        int to_id = in_msg_body~load_uint(64);
+        slice sender_address = in_msg_body~load_msg_addr();  ;; Recipient address
+        int order_id = in_msg_body~load_uint(256);      ;; Amount to mint
 
         ;; Prepare mint message for Jetton master
         cell mint_msg = begin_cell()
             .store_uint(op::mint, 32)           ;; op for minting
             .store_uint(query_id, 64)             ;; query_id
-            .store_slice(to_address)              ;; destination address
+            .store_slice(sender_address)              ;; destination address
             .store_coins(30000000)                ;; amount of TONs to send with internal_transfer
             .store_ref(                           ;; ref with internal_transfer message
                 begin_cell()
                     .store_uint(op::internal_transfer, 32)
                     .store_uint(query_id, 64)
-                    .store_coins(amount)          ;; amount of jettons to mint
+                    .store_coins(100000000)          ;; amount of jettons to mint
                     .store_slice(my_address())    ;; from address (this contract)
-                    .store_slice(to_address)      ;; response destination address
+                    .store_slice(sender_address)      ;; response destination address
                     .store_coins(0)               ;; forward_ton_amount
                     .store_uint(0, 1)             ;; forward_payload in this slice, not separate cell
                     .end_cell()
@@ -77,6 +79,14 @@
         order_nonce = order_nonce + 1;
         save_data(order_nonce, jetton_master_address);
         return ();
+    } elseif(op == op::upgrade) {
+        cell new_code = in_msg_body~load_ref();
+        set_code(new_code);
+        set_c3(new_code.begin_parse().bless());
+    } elseif (op == op::set_jetton_master) {
+        slice new_jetton_master = in_msg_body~load_msg_addr();
+        save_data(order_nonce, new_jetton_master);
+        return ();
     } else {
         throw(0xffff);
     }
@@ -86,6 +96,11 @@
 int get_order_nonce() method_id {
     (int order_nonce, _) = load_data();
     return order_nonce;
+}
+
+int get_order_nonce_2() method_id {
+    (int order_nonce, _) = load_data();
+    return order_nonce + 100;
 }
 
 slice get_jetton_master_address() method_id {
