@@ -2,6 +2,10 @@
 
 ## Contracts
 
+### USDT
+
+EQCmT6Rpx37RHKjlaFEFjjnPi7sIzhjfEvq8PWD1KbFcuOR0
+
 ### Bridge Testnet
 EQD3Wjz6cPIMUp6utrbZZmd_GEBxEAgJSafnoSWItnk5PuFA
 

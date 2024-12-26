@@ -5,6 +5,7 @@ const TON_CHAIN_ID = 1360104473493506;
 const MOS_ADDRESS = 730755169160216306343173230460131865033014900808;
 
 ;; op
+const int op::transfer = 0xf8a7ea5;
 const int op::message_in = "op::message_in"c;
 const int op::message_out = "op::message_out"c;
 const int op::mapo_execute = "op::mapo_execute"c;

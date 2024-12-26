@@ -6,6 +6,8 @@
 
 #include "data.fc";
 
+const slice BRIDGE_USDT_JETTON_WALLET = "kQBR3Bu987pUdhO1g514-B4XLeWHv5Td5zeB3oRx8KWvjPF5"a;
+
 (int) verify_signature(int expected_address, int sign_number, cell signs_cell, int hash) impure {
     slice signs_slice = signs_cell.begin_parse();
     cell sign_cell = signs_slice~load_ref();
@@ -58,7 +60,7 @@
 
     slice header_ds = header.begin_parse();
     int version = header_ds~load_uint(8);
-    int relay = header_ds~load_uint(8);
+    int message_type = header_ds~load_uint(8);
     int token_len = header_ds~load_uint(8);
     int mos_len = header_ds~load_uint(8);
     int from_len = header_ds~load_uint(8);
@@ -82,7 +84,7 @@
 
     slice full_addr = addr_builder.end_cell().begin_parse();
 
-    return (full_addr, reserved, gas_limit, payload);
+    return (full_addr, message_type, gas_limit, payload, token_amount);
 }
 
 () call_mapo_execute(slice to_addr, int gas_limit, cell payload) impure {
@@ -121,10 +123,30 @@
     throw_unless(error::wrong_meta, expected_hash == hash);
 
     cell packed_cell = in_msg_body~load_ref();
-    (slice to_addr, int reserved, int gas_limit, cell payload) = parse_packed_data(packed_cell);
+    (slice to_addr, int message_type, int gas_limit, cell payload, int token_amount) = parse_packed_data(packed_cell);
 
-    if (reserved == 0) {
+    ;;
+    if (message_type == 1) {
         call_mapo_execute(to_addr, gas_limit, payload);
+    } elseif (message_type == 3) {
+        var msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(BRIDGE_USDT_JETTON_WALLET)
+            .store_coins(0)
+            .store_msgbody_prefix_ref(
+                begin_cell()
+                    .store_op(op::transfer)
+                    .store_query_id(0)
+                    .store_coins(token_amount)
+                    .store_slice(to_addr)
+                    .store_slice(my_address())
+                    .store_uint(0, 1)
+                    .store_coins(0)
+                    .store_int(false, 1)
+                    .end_cell()
+            );
+
+        return send_raw_message(msg.end_cell(), 64);
     }
 
     return ();
