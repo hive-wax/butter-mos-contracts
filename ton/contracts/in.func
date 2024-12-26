@@ -36,7 +36,7 @@ const slice BRIDGE_USDT_JETTON_WALLET = "kQBR3Bu987pUdhO1g514-B4XLeWHv5Td5zeB3oR
     return (expected_hash, chain_id);
 }
 
-(slice, int, int, cell) parse_packed_data(cell packed_cell) impure {
+(slice, int, int, cell, int) parse_packed_data(cell packed_cell) impure {
     slice packed_ds = packed_cell.begin_parse();
     int addr = packed_ds~load_uint(256);
     cell topics = packed_ds~load_ref();
