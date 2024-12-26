@@ -2,8 +2,8 @@ import { Cell, beginCell, Builder } from '@ton/core';
 
 export class PayloadCodec {
     // Use 1020 bits (127.5 bytes, exactly 255 hex chars)
-    private readonly MAX_BITS = 1016;
-    private readonly MAX_HEX_CHARS = 1016 / 4;
+    private readonly MAX_BITS = 768;
+    private readonly MAX_HEX_CHARS = 768 / 4;
 
     /**
      * Convert hex string to binary string

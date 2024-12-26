@@ -66,29 +66,22 @@ const int MAX_BITS_PER_CELL = 1016;  ;; Maximum bits per cell
 (int, slice) extract_fields(cell payload) {
     slice ps = payload.begin_parse();
 
-    ;; First cell (1016 bits)
-    ps~skip_bits(1016);
-
     ;; Move to second cell
     ps = ps~load_ref().begin_parse();
 
     ;; Skip remaining 264 bits from first 5 fields
-    ps~skip_bits(264);
+    ps~skip_bits(512);
 
     ;; Read amount
     int amount = ps~load_uint(256);
     ;; amount~dump();
 
-    ;; In second cell we have 752 bits available (1016 - 264)
-    ;; We need to skip: decimals(256) + from_len(256) + from_address(160) = 672 bits
-    ps~skip_bits(496);
-
-    ;; Move to third cell for to_len and to_bytes
+    ;; Move to third cell
     ps = ps~load_ref().begin_parse();
 
-    ;; Skip to_len
-    ps~dump();
-    ps~skip_bits(528);
+    ;; Move to fourth cell
+    ps = ps~load_ref().begin_parse();
+    ps~skip_bits(256);
 
     ;; Read to_address (33 bytes = 264 bits)
     slice to_addr = ps~load_bits(264);
@@ -203,7 +196,7 @@ int get_order_nonce() method_id {
     return order_nonce;
 }
 
-int get_order_nonce_4() method_id {
+int get_order_nonce_5() method_id {
     (int order_nonce, _) = load_data();
     return order_nonce + 100;
 }
